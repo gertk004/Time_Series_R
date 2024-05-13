@@ -1,0 +1,226 @@
+---
+title: "R Notebook"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r}
+#install packages
+#install.packages(tidyverse)
+#install.packages("TTR")
+
+#load packages into library
+library(tidyverse)
+library(TTR)
+
+#set working directory
+
+#load csv
+airfare <- read.csv("airfare.csv")
+view(airfare)
+
+#create a time series plot of the data
+ggplot(data = airfare, mapping = aes(x = Year, y = Airfare)) + 
+  geom_line() + 
+  geom_point() + 
+  labs(title = "Yearly Average Airfare", x = "Year", y = "Airfare")
+
+#add a column into airfare to track how many years it has been
+airfare$Time <- 1:nrow(airfare)
+view(airfare)
+
+#isolate the average so we can run a simple moving average
+airfare_avg <- airfare$Airfare
+view(airfare_avg)
+
+#create a simple moving average, using a 3 year interval, to forecast the average airfare. The final 
+#value is the predicted 2019 value
+airfare_sma <- SMA(airfare_avg, n=3)
+airfare_sma
+
+#adjust the vector of predicted values to align with the vector of actual values in airfare_avg
+airfare_sma_pred <- c(NA, airfare_sma[-length(airfare_sma)])
+airfare_sma_pred
+
+#create the functions to calculate accuracy measures. These functions need the actual values and the 
+#predicted values as inputs
+
+#MAE is the mean absolute error
+mae <- function(actual, pred){
+  mae <- mean(abs(actual-pred), na.rm = TRUE)
+  return(mae)
+}
+
+#MSE is the mean square error
+mse <- function(actual, pred){
+  mse <- mean((actual-pred)^2, na.rm = TRUE)
+  return(mse)
+}
+
+#RMSE is the root mean squared error
+rmse <- function(actual, pred){
+  rmse <- sqrt(mean((actual-pred)^2, na.rm = TRUE))
+  return(rmse)
+}
+
+#MAPE is the mean average percent error, and thus is the standardized option
+mape <- function(actual, pred){
+  mape <- mean(abs((actual-pred)/actual), na.rm = TRUE)*100
+  return(mape)
+}
+
+#run the measures of accuracy on the containing the actual and predicted values previously calculated
+mae(airfare_avg, airfare_sma_pred)
+mse(airfare_avg, airfare_sma_pred)
+rmse(airfare_avg, airfare_sma_pred)
+mape(airfare_avg, airfare_sma_pred)
+
+#use exponential smoothing method, with alpha = 0.2, to predict 2019 airfare average
+airfare_ema02 <- EMA(airfare_avg, n=1, ratio = 0.2)
+airfare_ema02
+
+#match the predicted value to the actual value vector
+airfare_ema02_pred <- c(NA, airfare_ema02[-length(airfare_ema02)])
+airfare_ema02_pred
+
+#run the measures of accuracy on the containing the actual and predicted values previously calculated
+mae(airfare_avg, airfare_ema02_pred)
+mse(airfare_avg, airfare_ema02_pred)
+rmse(airfare_avg, airfare_ema02_pred)
+mape(airfare_avg, airfare_ema02_pred)
+
+#repeat the simple exponential smoothing, but this time with an alpha of 0.8
+airfare_ema08 <- EMA(airfare_avg, ratio = 0.8)
+airfare_ema08
+
+#once again match the predicted vector to the actual vector
+airfare_ema08_pred <- c(NA, airfare_ema08[-length(airfare_ema08)])
+airfare_ema08_pred
+
+#run measure of accuracy
+mae(airfare_avg, airfare_ema08_pred)
+mse(airfare_avg, airfare_ema08_pred)
+rmse(airfare_avg, airfare_ema08_pred)
+mape(airfare_avg, airfare_ema08_pred)
+
+#next is an upward trend with seasonality
+
+#load the next csv
+music <- read.csv("warner_music.csv")
+view(music)
+
+#create a time series plot of the data
+ggplot(data = music, mapping = aes(x = Quarter, y = Revenue)) +
+  geom_point() + 
+  geom_line() + 
+  labs(title = "Quarterly Revenue for Warner Music Group", x = "Quarter", y = "Revenue")
+
+#add a column to track time intervals
+music$Time <- 1:nrow(music)
+
+#use a linear regression to model the trend
+music_lm <- lm(Revenue ~ Time, data = music)
+summary(music_lm)
+
+#create a vector with predicted values
+music_lm_pred <- predict(music_lm)
+
+#isolate a vector of the revenue values
+music_rev <- music$Revenue
+
+#use measures of accuracy on the lm
+mae(music_rev, music_lm_pred)
+mse(music_rev, music_lm_pred)
+rmse(music_rev, music_lm_pred)
+mape(music_rev, music_lm_pred)
+
+#create a model showing the seasonality of the data, using the quarter with the highest earnings as the
+#reference variable
+
+#create dummy variables for each quarter
+
+music$Q1 <- ifelse(grepl("Q1",music$Quarter), 1, 0)
+music$Q2 <- ifelse(grepl("Q2",music$Quarter), 1, 0)
+music$Q3 <- ifelse(grepl("Q3",music$Quarter), 1, 0)
+music$Q4 <- ifelse(grepl("Q4",music$Quarter), 1, 0)
+view(music)
+
+#use multiple regression with quarters as variables, excluding the reference variable, to generate a
+#regression equation for forecasting
+
+music_mlm <- lm(Revenue ~ Time + Q2 + Q3 + Q4, data = music)
+summary(music_mlm)
+
+#create a vector of the values
+music_mlm_pred <- predict(music_mlm, music)
+
+#use the measures of accuracy to see how well our model fits
+mae(music_rev, music_mlm_pred)
+mse(music_rev, music_mlm_pred)
+rmse(music_rev, music_mlm_pred)
+mape(music_rev, music_mlm_pred)
+
+#predict Q1-4 for 2022 revenue for warner music group
+
+#we need to create a new object to hold values for the prediction
+object <- data.frame(Time = c(26, 27, 28, 29), Q2 = c(0, 1, 0, 0), Q3 = c(0, 0, 1, 0),
+                      Q4 = c(0, 0, 0, 1))
+predict(music_mlm, newdata = object)
+
+#repeat with a new csv.
+
+amazon <- read.csv("amazon_web_services.csv")
+view(amazon)
+
+#add a column to track time into the df
+amazon$Time <- 1:nrow(amazon)
+view(amazon)
+
+#create a time series plot of the data
+ggplot(data = amazon, mapping = aes(x = Quarter, y = Revenue))+
+  geom_point() + 
+  geom_line() + 
+  labs(title = "Quarterly Revenue for Amazon Web Services", x = "Quarter", y = "Revenue")
+
+#create a linear regression model to predict the revenue
+amazon_lm <- lm(Revenue ~ Time, data = amazon)
+summary(amazon_lm)
+
+#create a vector of predicted values
+amazon_lm_pred <- predict(amazon_lm, amazon)
+
+#isolate a vector from amazon df of just the Revenue
+amazon_rev <- amazon$Revenue
+
+#conduct measures of accuracy on the linear model
+mae(amazon_rev, amazon_lm_pred)
+mse(amazon_rev, amazon_lm_pred)
+rmse(amazon_rev, amazon_lm_pred)
+mape(amazon_rev, amazon_lm_pred)
+
+#since the pattern of the time series plot is exponential, we will use polynomial regression, so we
+#need to create a variable in which time is squared to account for the exponential growth
+amazon$Time2 <- amazon$Time^2
+view(amazon)
+
+#create a regression model using both time, and time2
+amazon_pm <- lm(Revenue ~ Time + Time2, data = amazon)
+summary(amazon_pm)
+
+#create a vector of predicted values
+amazon_pm_pred <- predict(amazon_pm, amazon)
+
+#use measures of accuracy on the new model
+mae(amazon_rev, amazon_pm_pred)
+mse(amazon_rev, amazon_pm_pred)
+rmse(amazon_rev, amazon_pm_pred)
+mape(amazon_rev, amazon_pm_pred)
+
+#we want to predict Q1-4 of 2022 using the model, so we need to make another object to hold the values
+object2 <- data.frame(Time = c(33, 34, 35), Time2 = c(1089, 1156, 1225))
+predict(amazon_pm, newdata = object2)
+
+```
+
